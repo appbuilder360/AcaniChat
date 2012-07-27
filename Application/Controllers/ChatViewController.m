@@ -126,7 +126,10 @@ static CGFloat const kChatBarHeight4    = 94.0f;
     chatBar.userInteractionEnabled = YES;
     
     // Create chatInput.
-    chatInput = [[UITextView alloc] initWithFrame:CGRectMake(10.0f, 9.0f, 234.0f, 22.0f)];
+    
+   CGFloat width =  self.view.frame.size.width - 100;
+    
+    chatInput = [[UITextView alloc] initWithFrame:CGRectMake(10.0f, 9.0f, width, 22.0f)];
     chatInput.contentSize = CGSizeMake(234.0f, 22.0f);
     chatInput.delegate = self;
     chatInput.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight | UIViewContentModeRight | UIViewContentModeLeft;
