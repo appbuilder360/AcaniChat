@@ -198,6 +198,32 @@ static CGFloat const kChatBarHeight4    = 94.0f;
     [super viewDidDisappear:animated];
 }
 
+-(void)viewDidAppear:(BOOL)animated {
+    [super viewDidAppear:animated];
+    
+    
+    XMPPRoomCoreDataStorage * storage =  [self.room xmppRoomStorage];
+
+   NSArray * objects = [storage messagesForRoom:self.room.roomJID stream:nil inContext:nil];
+    
+    
+    for(XMPPRoomMessageCoreDataStorageObject * message in objects) {
+        // Mark message as read.
+        // Let's instead do this (asynchronously) from loadView and iterate over all messages
+        if (![message isRead]) { // not read, so save as read
+            [message setIsRead:YES];
+
+        }
+    }
+    
+    dispatch_async([storage getStorageQueue], ^{
+    
+        [storage save];
+
+    });
+    
+}
+
 - (BOOL)shouldAutorotateToInterfaceOrientation:(UIInterfaceOrientation)interfaceOrientation {
     return (interfaceOrientation != UIInterfaceOrientationPortraitUpsideDown);
 }
@@ -435,6 +461,13 @@ static CGFloat const kChatBarHeight4    = 94.0f;
         numberOfObjectsAdded = 2;
     }
     
+    
+    if(!message.isFromMe) {
+    
+    NSString * username = message.nickname;
+    [cellMap addObject:username];
+    numberOfObjectsAdded = numberOfObjectsAdded + 1;
+    }
     [cellMap addObject:message];
     
     return numberOfObjectsAdded;
@@ -543,7 +576,7 @@ static NSString *kMessageCell = @"MessageCell";
             msgSentDate = [[UILabel alloc] initWithFrame:
                             CGRectMake(-2.0f, 0.0f,
                                        tableView.frame.size.width, kSentDateFontSize+5.0f)];
-            msgSentDate.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewContentModeCenter;
+            msgSentDate.autoresizingMask = UIViewAutoresizingFlexibleWidth;
             msgSentDate.clearsContextBeforeDrawing = NO;
             msgSentDate.tag = SENT_DATE_TAG;
             msgSentDate.font = [UIFont boldSystemFontOfSize:kSentDateFontSize];
@@ -552,9 +585,9 @@ static NSString *kMessageCell = @"MessageCell";
             msgSentDate.backgroundColor = CHAT_BACKGROUND_COLOR; // clearColor slows performance
             msgSentDate.textColor = [UIColor grayColor];
             [cell addSubview:msgSentDate];
-//            // Uncomment for view layout debugging.
+            // Uncomment for view layout debugging.
 //            cell.contentView.backgroundColor = [UIColor orangeColor];
-//            msgSentDate.backgroundColor = [UIColor orangeColor];
+//           msgSentDate.backgroundColor = [UIColor orangeColor];
         } else {
             msgSentDate = (UILabel *)[cell viewWithTag:SENT_DATE_TAG];
         }
@@ -572,8 +605,51 @@ static NSString *kMessageCell = @"MessageCell";
         
         msgSentDate.text = [dateFormatter stringFromDate:(NSDate *)object];
         
+        CGFloat  width = msgSentDate.frame.size.width;
+        
+        CGFloat x = (cell.frame.size.width-width)/2;
+        [msgSentDate setFrame:CGRectMake(x, msgSentDate.frame.origin.y, width, msgSentDate.frame.size.height)];
+        
         return cell;
     }
+    
+    
+    //Handle User object
+    if ([object isKindOfClass:[NSString class]]) {
+        static NSString *kUsernameCellId = @"UsernameCell";
+        cell = [tableView dequeueReusableCellWithIdentifier:kUsernameCellId];
+        if (cell == nil) {
+            cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault
+                                          reuseIdentifier:kUsernameCellId] ;
+            cell.selectionStyle = UITableViewCellSelectionStyleNone;
+            
+            // Create message sentDate lable
+            msgSentDate = [[UILabel alloc] initWithFrame:
+                           CGRectMake(7.0f, 0.0f,
+                                      tableView.frame.size.width, kSentDateFontSize+5.0f)];
+            msgSentDate.autoresizingMask = UIViewAutoresizingFlexibleWidth;
+            msgSentDate.clearsContextBeforeDrawing = NO;
+            msgSentDate.tag = SENT_DATE_TAG;
+            msgSentDate.font = [UIFont boldSystemFontOfSize:kSentDateFontSize];
+            msgSentDate.lineBreakMode = UILineBreakModeTailTruncation;
+            msgSentDate.textAlignment = UITextAlignmentLeft;
+            msgSentDate.backgroundColor = CHAT_BACKGROUND_COLOR; // clearColor slows performance
+            msgSentDate.textColor = [UIColor grayColor];
+            [cell addSubview:msgSentDate];
+//                        // Uncomment for view layout debugging.
+//                        cell.contentView.backgroundColor = [UIColor orangeColor];
+//                        msgSentDate.backgroundColor = [UIColor orangeColor];
+        } else {
+            msgSentDate = (UILabel *)[cell viewWithTag:SENT_DATE_TAG];
+        }
+        
+               
+        msgSentDate.text = (NSString *)object;
+        
+        return cell;
+    }
+    
+    
     
     // Handle Message object.
     cell = [tableView dequeueReusableCellWithIdentifier:kMessageCell];
@@ -633,17 +709,7 @@ static NSString *kMessageCell = @"MessageCell";
     msgBackground.image = bubbleImage;
     msgText.text = [(XMPPRoomMessageCoreDataStorageObject *)object body];
     
-    // Mark message as read.
-    // Let's instead do this (asynchronously) from loadView and iterate over all messages
-    if (![(XMPPRoomMessageCoreDataStorageObject *)object read]) { // not read, so save as read
-        [(XMPPRoomMessageCoreDataStorageObject *)object setRead:YES];
-        NSError *error;
-        if (![managedObjectContext save:&error]) {
-            // TODO: Handle the error appropriately.
-            NSLog(@"Save message as read error %@, %@", error, [error userInfo]);
-        }
-    }
-    
+       
     return cell;
 }
 
@@ -682,7 +748,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
     NSObject *object = [cellMap objectAtIndex:[indexPath row]];
     
     // Set SentDateCell height.
-    if ([object isKindOfClass:[NSDate class]]) {
+    if ([object isKindOfClass:[NSDate class]] || [object isKindOfClass:[NSString class]]) {
         return kSentDateFontSize + 7.0f;
     }
     
@@ -767,6 +833,28 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
             [chatContent insertRowsAtIndexPaths:indexPaths
                                withRowAnimation:UITableViewRowAnimationNone];
             [self scrollToBottomAnimated:YES];
+            
+            XMPPRoomCoreDataStorage * storage =  [self.room xmppRoomStorage];
+            
+            NSArray * objects = [storage messagesForRoom:self.room.roomJID stream:nil inContext:nil];
+            
+            
+            for(XMPPRoomMessageCoreDataStorageObject * message in objects) {
+                // Mark message as read.
+                // Let's instead do this (asynchronously) from loadView and iterate over all messages
+                if (![message isRead]) { // not read, so save as read
+                    [message setIsRead:YES];
+                    
+                }
+            }
+            
+            dispatch_async([storage getStorageQueue], ^{
+                
+                [storage save];
+                
+            });
+
+            
             break;
         }
         case NSFetchedResultsChangeDelete: {
