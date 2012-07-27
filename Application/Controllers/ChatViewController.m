@@ -1,7 +1,8 @@
 // Old
 #import "ChatViewController.h"
-#import "Message.h"
 #import "NSString+Additions.h"
+#import "XMPPRoomCoreDataStorage.h"
+
 
 // Exact same color as native iPhone Messages app.
 // Achieved by taking a screen shot of the iPhone by pressing Home & Sleep buttons together.
@@ -60,18 +61,6 @@ static CGFloat const kChatBarHeight4    = 94.0f;
 - (void)dealloc {
     if (receiveMessageSound) AudioServicesDisposeSystemSoundID(receiveMessageSound);
     
-    [chatContent release];
-    
-    [chatBar release];
-    [chatInput release];
-    [sendButton release];
-    
-    [cellMap release];
-    
-    [fetchedResultsController release];
-    [managedObjectContext release];
-    
-    [super dealloc];
 }
 
 #pragma mark UIViewController
@@ -95,9 +84,13 @@ static CGFloat const kChatBarHeight4    = 94.0f;
 
 - (void)viewDidLoad {
     [super viewDidLoad];
-    NSLog(@"viewDidLoad");
 
-    self.title = [[[NSBundle mainBundle] infoDictionary] objectForKey:@"CFBundleDisplayName"];
+    
+    XMPPRoomCoreDataStorage *storage = self.room.xmppRoomStorage;
+    
+    self.managedObjectContext = storage.mainThreadManagedObjectContext;
+
+    self.title = @"Messages";
     
     // Listen for keyboard.
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(keyboardWillShow:)
@@ -136,18 +129,19 @@ static CGFloat const kChatBarHeight4    = 94.0f;
     chatInput = [[UITextView alloc] initWithFrame:CGRectMake(10.0f, 9.0f, 234.0f, 22.0f)];
     chatInput.contentSize = CGSizeMake(234.0f, 22.0f);
     chatInput.delegate = self;
-    chatInput.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+    chatInput.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight | UIViewContentModeRight | UIViewContentModeLeft;
     chatInput.scrollEnabled = NO; // not initially
     chatInput.scrollIndicatorInsets = UIEdgeInsetsMake(5.0f, 0.0f, 4.0f, -2.0f);
     chatInput.clearsContextBeforeDrawing = NO;
     chatInput.font = [UIFont systemFontOfSize:kMessageFontSize];
     chatInput.dataDetectorTypes = UIDataDetectorTypeAll;
     chatInput.backgroundColor = [UIColor clearColor];
+    
     previousContentHeight = chatInput.contentSize.height;
     [chatBar addSubview:chatInput];
     
     // Create sendButton.
-    sendButton = [[UIButton buttonWithType:UIButtonTypeCustom] retain];
+    sendButton = [UIButton buttonWithType:UIButtonTypeCustom];
     sendButton.clearsContextBeforeDrawing = NO;
     sendButton.frame = CGRectMake(chatBar.frame.size.width - 70.0f, 8.0f, 64.0f, 26.0f);
     sendButton.autoresizingMask = UIViewAutoresizingFlexibleTopMargin | // multi-line input
@@ -160,7 +154,6 @@ static CGFloat const kChatBarHeight4    = 94.0f;
     [sendButton setTitle:@"Send" forState:UIControlStateNormal];
     UIColor *shadowColor = [[UIColor alloc] initWithRed:0.325f green:0.463f blue:0.675f alpha:1.0f];
     [sendButton setTitleShadowColor:shadowColor forState:UIControlStateNormal];
-    [shadowColor release];
     [sendButton addTarget:self action:@selector(sendMessage)
          forControlEvents:UIControlEventTouchUpInside];
 //    // The following three lines aren't necessary now that we'are using background image.
@@ -173,24 +166,6 @@ static CGFloat const kChatBarHeight4    = 94.0f;
     [self.view addSubview:chatBar];
     [self.view sendSubviewToBack:chatBar];
     
-//    // Test with lots of messages.
-//    NSDate *before = [NSDate date];
-//    for (NSUInteger i = 0; i < 500; i++) {
-//        Message *msg = (Message *)[NSEntityDescription
-//                                   insertNewObjectForEntityForName:@"Message"
-//                                   inManagedObjectContext:managedObjectContext];
-//    msg.text = [NSString stringWithFormat:@"This is message number %d", i];
-//    NSDate *now = [[NSDate alloc] init]; msg.sentDate = now; [now release];
-//    }
-////    sleep(2);
-//    NSLog(@"Creating messages in memory takes %f seconds", [before timeIntervalSinceNow]);
-//    NSError *error;
-//    if (![managedObjectContext save:&error]) {
-//        // TODO: Handle the error appropriately.
-//        NSLog(@"Mass message creation error %@, %@", error, [error userInfo]);
-//    }
-//    NSLog(@"Saving messages to disc takes %f seconds", [before timeIntervalSinceNow]);
-    
     [self fetchResults];
     
     // Construct cellMap from fetchedObjects.
@@ -198,20 +173,25 @@ static CGFloat const kChatBarHeight4    = 94.0f;
                initWithCapacity:[[fetchedResultsController fetchedObjects] count]*2];
     
    
-    for (Message *message in [fetchedResultsController fetchedObjects]) {
+    for (XMPPRoomMessageCoreDataStorageObject *message in [fetchedResultsController fetchedObjects]) {
         [self addMessage:message];
     }
     
     // TODO: Implement check-box edit mode like iPhone Messages does. (Icebox)
-    self.navigationItem.rightBarButtonItem = self.editButtonItem;
+   // self.navigationItem.rightBarButtonItem = self.editButtonItem;
 }
 
 - (void)viewWillAppear:(BOOL)animated {
     [super viewWillAppear:animated]; // below: work around for [chatContent flashScrollIndicators]
-    NSLog(@"viewWillAppear");
     [chatContent performSelector:@selector(flashScrollIndicators) withObject:nil afterDelay:0.0];
-    [self scrollToBottomAnimated:NO];
+    [self scrollToBottomAnimated:YES];
+    
 }
+
+-(void)viewWillDisappear:(BOOL)animated {
+    fetchedResultsController = nil;
+}
+
 
 - (void)viewDidDisappear:(BOOL)animated {
     [chatInput resignFirstResponder];
@@ -232,7 +212,6 @@ static CGFloat const kChatBarHeight4    = 94.0f;
         UIBarButtonItem *clearAllButton = BAR_BUTTON(NSLocalizedString(@"Clear All", nil),
                                                      @selector(clearAll));
         self.navigationItem.leftBarButtonItem = clearAllButton;
-        [clearAllButton release];
     } else {
         self.navigationItem.leftBarButtonItem = nil;
     }
@@ -399,18 +378,7 @@ static CGFloat const kChatBarHeight4    = 94.0f;
         return;
     }
     
-    // Create new message and save to Core Data.
-    Message *newMessage = (Message *)[NSEntityDescription
-                                      insertNewObjectForEntityForName:@"Message"
-                                      inManagedObjectContext:managedObjectContext];
-    newMessage.text = rightTrimmedMessage;
-    NSDate *now = [[NSDate alloc] init]; newMessage.sentDate = now; [now release];
-
-    NSError *error;
-    if (![managedObjectContext save:&error]) {
-        // TODO: Handle the error appropriately.
-        NSLog(@"sendMessage error %@, %@", error, [error userInfo]);
-    }
+    [self.room sendMessage:rightTrimmedMessage];
     
     [self clearChatInput];
     
@@ -418,7 +386,7 @@ static CGFloat const kChatBarHeight4    = 94.0f;
     
     // Play sound or buzz, depending on user settings.
     NSString *sendPath = [[NSBundle mainBundle] pathForResource:@"basicsound" ofType:@"wav"];
-    CFURLRef baseURL = (CFURLRef)[NSURL fileURLWithPath:sendPath];
+    CFURLRef baseURL = (__bridge CFURLRef)[NSURL fileURLWithPath:sendPath];
     AudioServicesCreateSystemSoundID(baseURL, &receiveMessageSound);
     AudioServicesPlaySystemSound(receiveMessageSound);
 //    AudioServicesPlayAlertSound(receiveMessageSound); // use for receiveMessage (sound & vibrate)
@@ -436,10 +404,10 @@ static CGFloat const kChatBarHeight4    = 94.0f;
 }
 
 // Returns number of objects added to cellMap (1 or 2).
-- (NSUInteger)addMessage:(Message *)message 
+- (NSUInteger)addMessage:(XMPPRoomMessageCoreDataStorageObject *)message 
 {
     // Show sentDates at most every 15 minutes.
-    NSDate *currentSentDate = message.sentDate;
+    NSDate *currentSentDate = message.localTimestamp;
     NSUInteger numberOfObjectsAdded = 1;
     NSUInteger prevIndex = [cellMap count] - 1;
     
@@ -447,11 +415,11 @@ static CGFloat const kChatBarHeight4    = 94.0f;
 
     if([cellMap count])
     {
-        BOOL prevIsMessage = [[cellMap objectAtIndex:prevIndex] isKindOfClass:[Message class]];
+        BOOL prevIsMessage = [[cellMap objectAtIndex:prevIndex] isKindOfClass:[XMPPRoomMessageCoreDataStorageObject class]];
         if(prevIsMessage)
         {
-            Message * temp = [cellMap objectAtIndex:prevIndex];
-            NSDate * previousSentDate = temp.sentDate;
+            XMPPRoomMessageCoreDataStorageObject * temp = [cellMap objectAtIndex:prevIndex];
+            NSDate * previousSentDate = temp.localTimestamp;
             // if there has been more than a 15 min gap between this and the previous message!
             if([currentSentDate timeIntervalSinceDate:previousSentDate] > SECONDS_BETWEEN_MESSAGES) 
             { 
@@ -486,8 +454,8 @@ static CGFloat const kChatBarHeight4    = 94.0f;
     BOOL isLastObject = index == cellMapCount;
     BOOL prevIsDate = [[cellMap objectAtIndex:prevIndex] isKindOfClass:[NSDate class]];
     
-    if (isLastObject && prevIsDate ||
-        prevIsDate && [[cellMap objectAtIndex:index] isKindOfClass:[NSDate class]]) {
+    if ((isLastObject && prevIsDate) ||
+        (prevIsDate && [[cellMap objectAtIndex:index] isKindOfClass:[NSDate class]])) {
         [cellMap removeObjectAtIndex:prevIndex];
         numberOfObjectsRemoved = 2;
     }
@@ -505,7 +473,6 @@ static CGFloat const kChatBarHeight4    = 94.0f;
     
     [confirm showFromBarButtonItem:self.navigationItem.leftBarButtonItem animated:YES];
 //    [confirm showInView:self.view];
-	[confirm release];
     
 }
 
@@ -516,7 +483,7 @@ static CGFloat const kChatBarHeight4    = 94.0f;
 		case ClearConversationButtonIndex: {
             NSError *error;
             fetchedResultsController.delegate = nil;               // turn off delegate callbacks
-            for (Message *message in [fetchedResultsController fetchedObjects]) {
+            for (XMPPRoomMessageCoreDataStorageObject *message in [fetchedResultsController fetchedObjects]) {
                 [managedObjectContext deleteObject:message];
             }
             if (![managedObjectContext save:&error]) {
@@ -568,15 +535,15 @@ static NSString *kMessageCell = @"MessageCell";
         static NSString *kSentDateCellId = @"SentDateCell";
         cell = [tableView dequeueReusableCellWithIdentifier:kSentDateCellId];
         if (cell == nil) {
-            cell = [[[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault
-                                           reuseIdentifier:kSentDateCellId] autorelease];
+            cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault
+                                           reuseIdentifier:kSentDateCellId] ;
             cell.selectionStyle = UITableViewCellSelectionStyleNone;
             
             // Create message sentDate lable
             msgSentDate = [[UILabel alloc] initWithFrame:
                             CGRectMake(-2.0f, 0.0f,
                                        tableView.frame.size.width, kSentDateFontSize+5.0f)];
-            msgSentDate.autoresizingMask = UIViewAutoresizingFlexibleWidth;
+            msgSentDate.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewContentModeCenter;
             msgSentDate.clearsContextBeforeDrawing = NO;
             msgSentDate.tag = SENT_DATE_TAG;
             msgSentDate.font = [UIFont boldSystemFontOfSize:kSentDateFontSize];
@@ -585,7 +552,6 @@ static NSString *kMessageCell = @"MessageCell";
             msgSentDate.backgroundColor = CHAT_BACKGROUND_COLOR; // clearColor slows performance
             msgSentDate.textColor = [UIColor grayColor];
             [cell addSubview:msgSentDate];
-            [msgSentDate release];
 //            // Uncomment for view layout debugging.
 //            cell.contentView.backgroundColor = [UIColor orangeColor];
 //            msgSentDate.backgroundColor = [UIColor orangeColor];
@@ -602,7 +568,6 @@ static NSString *kMessageCell = @"MessageCell";
             // TODO: Get locale from iPhone system prefs. Then, move this to viewDidAppear.
             NSLocale *usLocale = [[NSLocale alloc] initWithLocaleIdentifier:@"en_US"];
             [dateFormatter setLocale:usLocale];
-            [usLocale release];
         }
         
         msgSentDate.text = [dateFormatter stringFromDate:(NSDate *)object];
@@ -613,8 +578,8 @@ static NSString *kMessageCell = @"MessageCell";
     // Handle Message object.
     cell = [tableView dequeueReusableCellWithIdentifier:kMessageCell];
     if (cell == nil) {
-        cell = [[[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault
-                                       reuseIdentifier:kMessageCell] autorelease];
+        cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault
+                                       reuseIdentifier:kMessageCell] ;
         cell.selectionStyle = UITableViewCellSelectionStyleNone;
         
         // Create message background image view
@@ -623,7 +588,6 @@ static NSString *kMessageCell = @"MessageCell";
         msgBackground.tag = BACKGROUND_TAG;
         msgBackground.backgroundColor = CHAT_BACKGROUND_COLOR; // clearColor slows performance
         [cell.contentView addSubview:msgBackground];
-        [msgBackground release];
         
         // Create message text label
         msgText = [[UILabel alloc] init];
@@ -634,18 +598,17 @@ static NSString *kMessageCell = @"MessageCell";
         msgText.lineBreakMode = UILineBreakModeWordWrap;
         msgText.font = [UIFont systemFontOfSize:kMessageFontSize];
         [cell.contentView addSubview:msgText];
-        [msgText release];
     } else {
         msgBackground = (UIImageView *)[cell.contentView viewWithTag:BACKGROUND_TAG];
         msgText = (UILabel *)[cell.contentView viewWithTag:TEXT_TAG];
     }
     
     // Configure the cell to show the message in a bubble. Layout message cell & its subviews.
-    CGSize size = [[(Message *)object text] sizeWithFont:[UIFont systemFontOfSize:kMessageFontSize]
+    CGSize size = [[(XMPPRoomMessageCoreDataStorageObject *)object body] sizeWithFont:[UIFont systemFontOfSize:kMessageFontSize]
                                        constrainedToSize:CGSizeMake(kMessageTextWidth, CGFLOAT_MAX)
                                            lineBreakMode:UILineBreakModeWordWrap];
     UIImage *bubbleImage;
-    if (!([indexPath row] % 3)) { // right bubble
+    if ([[(XMPPRoomMessageCoreDataStorageObject *)object fromMe] boolValue]) { // right bubble
         CGFloat editWidth = tableView.editing ? 32.0f : 0.0f;
         msgBackground.frame = CGRectMake(tableView.frame.size.width-size.width-34.0f-editWidth,
                                          kMessageFontSize-13.0f, size.width+34.0f,
@@ -668,12 +631,12 @@ static NSString *kMessageCell = @"MessageCell";
         msgText.autoresizingMask = UIViewAutoresizingFlexibleRightMargin;
     }
     msgBackground.image = bubbleImage;
-    msgText.text = [(Message *)object text];
+    msgText.text = [(XMPPRoomMessageCoreDataStorageObject *)object body];
     
     // Mark message as read.
     // Let's instead do this (asynchronously) from loadView and iterate over all messages
-    if (![(Message *)object read]) { // not read, so save as read
-        [(Message *)object setRead:[NSNumber numberWithBool:YES]];
+    if (![(XMPPRoomMessageCoreDataStorageObject *)object read]) { // not read, so save as read
+        [(XMPPRoomMessageCoreDataStorageObject *)object setRead:YES];
         NSError *error;
         if (![managedObjectContext save:&error]) {
             // TODO: Handle the error appropriately.
@@ -685,7 +648,7 @@ static NSString *kMessageCell = @"MessageCell";
 }
 
 - (BOOL)tableView:(UITableView *)tableView canEditRowAtIndexPath:(NSIndexPath *)indexPath {
-    return [[cellMap objectAtIndex:[indexPath row]] isKindOfClass:[Message class]];
+    return [[cellMap objectAtIndex:[indexPath row]] isKindOfClass:[XMPPRoomMessageCoreDataStorageObject class]];
 //    return [[tableView cellForRowAtIndexPath:indexPath] reuseIdentifier] == kMessageCell;
 }
 
@@ -702,7 +665,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 //        NSLog(@"Delete %@", object);
         
         // Remove message from managed object context by index path.
-        [managedObjectContext deleteObject:(Message *)object];
+        [managedObjectContext deleteObject:(XMPPRoomMessageCoreDataStorageObject *)object];
         NSError *error;
         if (![managedObjectContext save:&error]) {
             // TODO: Handle the error appropriately.
@@ -724,7 +687,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
     }
     
     // Set MessageCell height.
-    CGSize size = [[(Message *)object text] sizeWithFont:[UIFont systemFontOfSize:kMessageFontSize]
+    CGSize size = [[(XMPPRoomMessageCoreDataStorageObject *)object body] sizeWithFont:[UIFont systemFontOfSize:kMessageFontSize]
                                        constrainedToSize:CGSizeMake(kMessageTextWidth, CGFLOAT_MAX)
                                            lineBreakMode:UILineBreakModeWordWrap];
     return size.height + 17.0f;
@@ -744,26 +707,25 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 - (void)fetchResults {
     if (fetchedResultsController) return;
 
+    XMPPRoomCoreDataStorage * storage = self.room.xmppRoomStorage;
+    
     // Create and configure a fetch request.
     NSFetchRequest *fetchRequest = [[NSFetchRequest alloc] init];
-    NSEntityDescription *entity = [NSEntityDescription entityForName:@"Message"
-                                              inManagedObjectContext:managedObjectContext];
+    NSEntityDescription *entity = [storage messageEntity:managedObjectContext];
+    
     [fetchRequest setEntity:entity];
     [fetchRequest setFetchBatchSize:20];
     
     // Create the sort descriptors array.
-    NSSortDescriptor *tsDesc = [[NSSortDescriptor alloc] initWithKey:@"sentDate" ascending:YES];
+    NSSortDescriptor *tsDesc = [[NSSortDescriptor alloc] initWithKey:@"localTimestamp" ascending:YES];
     NSArray *sortDescriptors = [[NSArray alloc] initWithObjects:tsDesc, nil];
-    [tsDesc release];
     [fetchRequest setSortDescriptors:sortDescriptors];
-    [sortDescriptors release];
     
     // Create and initialize the fetchedResultsController.
     fetchedResultsController = [[NSFetchedResultsController alloc]
                                 initWithFetchRequest:fetchRequest
                                 managedObjectContext:managedObjectContext
-                                sectionNameKeyPath:nil /* one section */ cacheName:@"Message"];
-    [fetchRequest release];
+                                sectionNameKeyPath:nil /* one section */ cacheName:nil];
     
     fetchedResultsController.delegate = self;
     
@@ -804,7 +766,6 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
             
             [chatContent insertRowsAtIndexPaths:indexPaths
                                withRowAnimation:UITableViewRowAnimationNone];
-            [indexPaths release];
             [self scrollToBottomAnimated:YES];
             break;
         }
@@ -823,7 +784,6 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
             
             [chatContent deleteRowsAtIndexPaths:indexPaths
                                withRowAnimation:UITableViewRowAnimationNone];
-            [indexPaths release];
             break;
         }
     }

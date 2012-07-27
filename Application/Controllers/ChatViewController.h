@@ -1,10 +1,12 @@
 // Old
 #import <AudioToolbox/AudioToolbox.h>
+#import "XMPPRoom.h"
+#import "XMPPRoomMessageCoreDataStorageObject.h"
 
 @class Message;
 
 @interface ChatViewController : UIViewController <NSFetchedResultsControllerDelegate,
-UITableViewDelegate, UITableViewDataSource, UITextViewDelegate, UIActionSheetDelegate> {
+UITableViewDelegate, UITableViewDataSource, UITextViewDelegate, UIActionSheetDelegate,XMPPRoomDelegate> {
 
 }
 
@@ -21,6 +23,7 @@ UITableViewDelegate, UITableViewDataSource, UITextViewDelegate, UIActionSheetDel
 
 @property (nonatomic, retain) NSManagedObjectContext *managedObjectContext;
 @property (nonatomic, retain) NSFetchedResultsController *fetchedResultsController;
+@property(nonatomic, strong)XMPPRoom * room;
 
 - (void)enableSendButton;
 - (void)disableSendButton;
@@ -33,10 +36,12 @@ UITableViewDelegate, UITableViewDataSource, UITextViewDelegate, UIActionSheetDel
 
 - (void)sendMessage;
 - (void)clearChatInput;
-- (NSUInteger)addMessage:(Message *)message;
+- (NSUInteger)addMessage:(XMPPRoomMessageCoreDataStorageObject *)message;
 - (NSUInteger)removeMessageAtIndex:(NSUInteger)index;
 - (void)clearAll;
 
 - (void)fetchResults;
+
+
 
 @end
