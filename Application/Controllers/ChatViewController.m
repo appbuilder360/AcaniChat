@@ -91,7 +91,8 @@ static CGFloat const kChatBarHeight4    = 94.0f;
     self.managedObjectContext = storage.mainThreadManagedObjectContext;
 
     self.title = @"Messages";
-    
+    [self.navigationController.navigationBar setTintColor:[UIColor lightGrayColor]];
+
     // Listen for keyboard.
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(keyboardWillShow:)
                                                  name:UIKeyboardWillShowNotification object:nil];
