@@ -3,6 +3,8 @@
 #import "NSString+Additions.h"
 #import "XMPPRoomCoreDataStorage.h"
 
+#import "RoomOccupantsViewController.h"
+
 
 // Exact same color as native iPhone Messages app.
 // Achieved by taking a screen shot of the iPhone by pressing Home & Sleep buttons together.
@@ -55,6 +57,8 @@ static CGFloat const kChatBarHeight4    = 94.0f;
 
 @synthesize fetchedResultsController;
 @synthesize managedObjectContext;
+
+@synthesize occupantsButton, iPadPopover, iPhonePopover;
 
 #pragma mark NSObject
 
@@ -181,8 +185,11 @@ static CGFloat const kChatBarHeight4    = 94.0f;
         [self addMessage:message];
     }
     
+    self.occupantsButton = [[UIBarButtonItem alloc] initWithTitle:@"Occupants" style:UIBarButtonItemStyleBordered target:self action:@selector(showRoomOccupants)];
+    
+    
     // TODO: Implement check-box edit mode like iPhone Messages does. (Icebox)
-   // self.navigationItem.rightBarButtonItem = self.editButtonItem;
+    self.navigationItem.rightBarButtonItem = self.occupantsButton;
 }
 
 - (void)viewWillAppear:(BOOL)animated {
@@ -885,5 +892,57 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 //- (void)controllerDidChangeContent:(NSFetchedResultsController *)controller {
 //    [chatContent endUpdates];
 //}
+
+
+
+#pragma mark Room Occupants
+
+-(void)showRoomOccupants {
+    
+    if(self.iPadPopover) {
+        [self.iPadPopover dismissPopoverAnimated:YES];
+        self.iPadPopover = nil;
+        return;
+    } else if(self.iPhonePopover) {
+        [self.iPhonePopover dismissPopoverAnimated:YES];
+        self.iPhonePopover = nil;
+        return;
+    }
+    
+    RoomOccupantsViewController * occupantView;
+    
+    if ([[UIDevice currentDevice] userInterfaceIdiom] == UIUserInterfaceIdiomPhone) {
+        occupantView = [[RoomOccupantsViewController alloc] initWithNibName:@"RoomOccupantsViewController_iPhone" bundle:nil];
+        [occupantView setRoom:self.room];
+        
+        self.iPhonePopover = [[WEPopoverController alloc] initWithContentViewController:occupantView];
+        [self.iPhonePopover setDelegate:self];
+        [self.iPhonePopover setPopoverContentSize:CGSizeMake(150, 250)];
+        [self.iPhonePopover presentPopoverFromBarButtonItem:self.occupantsButton permittedArrowDirections:UIPopoverArrowDirectionAny animated:YES];
+
+    } else {
+        occupantView = [[RoomOccupantsViewController alloc] initWithNibName:@"RoomOccupantsViewController_iPad" bundle:nil];
+        [occupantView setRoom:self.room];
+        self.iPadPopover = [[UIPopoverController alloc] initWithContentViewController:occupantView];
+        [self.iPadPopover setDelegate:self];
+        [self.iPadPopover setPopoverContentSize:CGSizeMake(350, 450)];
+        [self.iPadPopover presentPopoverFromBarButtonItem:self.occupantsButton permittedArrowDirections:UIPopoverArrowDirectionAny animated:YES];
+    }
+}
+
+
+
+
+-(void)popoverControllerDidDismissPopover:(UIPopoverController *)popoverController {
+    self.iPadPopover = nil;
+    self.iPhonePopover = nil;
+}
+
+- (BOOL)popoverControllerShouldDismissPopover:(UIPopoverController *)thePopoverController {
+	//The popover is automatically dismissed if you click outside it, unless you return NO here
+	return YES;
+}
+
+
 
 @end

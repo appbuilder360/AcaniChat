@@ -3,12 +3,22 @@
 #import "XMPPRoom.h"
 #import "XMPPRoomMessageCoreDataStorageObject.h"
 
+#import "RoomOccupantsViewController.h"
+
 @class Message;
 
 @interface ChatViewController : UIViewController <NSFetchedResultsControllerDelegate,
-UITableViewDelegate, UITableViewDataSource, UITextViewDelegate, UIActionSheetDelegate,XMPPRoomDelegate> {
+UITableViewDelegate, UITableViewDataSource, UITextViewDelegate, UIActionSheetDelegate,XMPPRoomDelegate, WEPopoverControllerDelegate, UIPopoverControllerDelegate> {
 
+    WEPopoverController * iPhonePopover;
+    UIPopoverController * iPadPopover;
+    UIBarButtonItem * occupantsButton;
 }
+
+@property(nonatomic,strong) WEPopoverController * iPhonePopover;
+@property(nonatomic,strong) UIPopoverController * iPadPopover;
+
+@property(nonatomic,strong) UIBarButtonItem * occupantsButton;
 
 @property (nonatomic, assign) SystemSoundID receiveMessageSound;
 
@@ -39,7 +49,7 @@ UITableViewDelegate, UITableViewDataSource, UITextViewDelegate, UIActionSheetDel
 - (NSUInteger)addMessage:(XMPPRoomMessageCoreDataStorageObject *)message;
 - (NSUInteger)removeMessageAtIndex:(NSUInteger)index;
 - (void)clearAll;
-
+-(void)showRoomOccupants;
 - (void)fetchResults;
 
 
