@@ -233,6 +233,8 @@ static CGFloat const kChatBarHeight4    = 94.0f;
 
     });
     
+    [chatContent reloadData];
+    
 }
 
 - (BOOL)shouldAutorotateToInterfaceOrientation:(UIInterfaceOrientation)interfaceOrientation {
@@ -841,9 +843,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
                               [NSIndexPath indexPathForRow:cellCount+1 inSection:0], nil];
             }
             
-            [chatContent insertRowsAtIndexPaths:indexPaths
-                               withRowAnimation:UITableViewRowAnimationNone];
-            [self scrollToBottomAnimated:YES];
+            
             
             XMPPRoomCoreDataStorage * storage =  [self.room xmppRoomStorage];
             
@@ -865,6 +865,27 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
                 
             });
 
+            [chatContent insertRowsAtIndexPaths:indexPaths
+                               withRowAnimation:UITableViewRowAnimationNone];
+            [self scrollToBottomAnimated:YES];
+            [chatContent reloadData];
+            
+            NSString *sendPath = [[NSBundle mainBundle] pathForResource:@"basicsound" ofType:@"wav"];
+            
+            
+            
+            SystemSoundID audioEffect;
+            
+            if ([[NSFileManager defaultManager] fileExistsAtPath : sendPath])
+            {
+                NSURL *pathURL = [NSURL fileURLWithPath : sendPath];
+                AudioServicesCreateSystemSoundID((__bridge CFURLRef) pathURL, &audioEffect);
+                AudioServicesPlaySystemSound(audioEffect);
+            }
+            else
+            {
+                NSLog(@"error, file not found: %@", sendPath);
+            }
             
             break;
         }
