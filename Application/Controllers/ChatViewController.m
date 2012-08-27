@@ -200,7 +200,15 @@ static CGFloat const kChatBarHeight4    = 94.0f;
 }
 
 -(void)viewWillDisappear:(BOOL)animated {
+    [super viewWillDisappear:animated];
     fetchedResultsController = nil;
+    if(self.iPadPopover) {
+        [self.iPadPopover dismissPopoverAnimated:YES];
+        self.iPadPopover = nil;
+    } else if(self.iPhonePopover) {
+        [self.iPhonePopover dismissPopoverAnimated:YES];
+        self.iPhonePopover = nil;
+    }
 }
 
 
