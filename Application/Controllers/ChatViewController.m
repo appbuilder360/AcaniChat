@@ -873,11 +873,12 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
                 
             });
 
-            [chatContent insertRowsAtIndexPaths:indexPaths withRowAnimation:UITableViewRowAnimationNone];
+          //  [chatContent insertRowsAtIndexPaths:indexPaths withRowAnimation:UITableViewRowAnimationNone];
 
+            
+            [chatContent reloadData];
             [self scrollToBottomAnimated:YES];
             [chatContent flashScrollIndicators];
-            [chatContent reloadData];
             NSString *sendPath = [[NSBundle mainBundle] pathForResource:@"basicsound" ofType:@"wav"];
             
             
