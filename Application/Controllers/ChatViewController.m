@@ -196,7 +196,25 @@ static CGFloat const kChatBarHeight4    = 94.0f;
     [super viewWillAppear:animated]; // below: work around for [chatContent flashScrollIndicators]
     [chatContent performSelector:@selector(flashScrollIndicators) withObject:nil afterDelay:0.0];
     [self scrollToBottomAnimated:YES];
+    XMPPRoomCoreDataStorage * storage =  [self.room xmppRoomStorage];
     
+    NSArray * objects = [storage messagesForRoom:self.room.roomJID stream:nil inContext:nil];
+    
+    
+    for(XMPPRoomMessageCoreDataStorageObject * message in objects) {
+        // Mark message as read.
+        // Let's instead do this (asynchronously) from loadView and iterate over all messages
+        if (![message isRead]) { // not read, so save as read
+            [message setIsRead:YES];
+            
+        }
+    }
+    
+    dispatch_async([storage getStorageQueue], ^{
+        
+        [storage save];
+        
+    });
 }
 
 -(void)viewWillDisappear:(BOOL)animated {
@@ -209,6 +227,26 @@ static CGFloat const kChatBarHeight4    = 94.0f;
         [self.iPhonePopover dismissPopoverAnimated:YES];
         self.iPhonePopover = nil;
     }
+    
+    XMPPRoomCoreDataStorage * storage =  [self.room xmppRoomStorage];
+    
+    NSArray * objects = [storage messagesForRoom:self.room.roomJID stream:nil inContext:nil];
+    
+    
+    for(XMPPRoomMessageCoreDataStorageObject * message in objects) {
+        // Mark message as read.
+        // Let's instead do this (asynchronously) from loadView and iterate over all messages
+        if (![message isRead]) { // not read, so save as read
+            [message setIsRead:YES];
+            
+        }
+    }
+    
+    dispatch_async([storage getStorageQueue], ^{
+        
+        [storage save];
+        
+    });
 }
 
 
@@ -562,7 +600,7 @@ static CGFloat const kChatBarHeight4    = 94.0f;
 #pragma mark UITableViewDataSource
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
-//    NSLog(@"number of rows: %d", [cellMap count]);
+    NSLog(@"number of rows: %d", [cellMap count]);
     return [cellMap count];
 }
 
@@ -705,7 +743,7 @@ static NSString *kMessageCell = @"MessageCell";
                                        constrainedToSize:CGSizeMake(kMessageTextWidth, CGFLOAT_MAX)
                                            lineBreakMode:UILineBreakModeWordWrap];
     UIImage *bubbleImage;
-    if ([[(XMPPRoomMessageCoreDataStorageObject *)object fromMe] boolValue]) { // right bubble
+    if ([(XMPPRoomMessageCoreDataStorageObject *)object isFromMe]) { // right bubble
         CGFloat editWidth = tableView.editing ? 32.0f : 0.0f;
         msgBackground.frame = CGRectMake(tableView.frame.size.width-size.width-34.0f-editWidth,
                                          kMessageFontSize-13.0f, size.width+34.0f,
@@ -730,7 +768,7 @@ static NSString *kMessageCell = @"MessageCell";
     msgBackground.image = bubbleImage;
     msgText.text = [(XMPPRoomMessageCoreDataStorageObject *)object body];
     
-       
+    [cell layoutIfNeeded];
     return cell;
 }
 
@@ -873,12 +911,17 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
                 
             });
 
-          //  [chatContent insertRowsAtIndexPaths:indexPaths withRowAnimation:UITableViewRowAnimationNone];
 
-            
+            [chatContent insertRowsAtIndexPaths:indexPaths withRowAnimation:UITableViewRowAnimationNone];
             [chatContent reloadData];
-            [self scrollToBottomAnimated:YES];
+             [self scrollToBottomAnimated:YES];
             [chatContent flashScrollIndicators];
+            
+      
+            
+            
+            
+           
             NSString *sendPath = [[NSBundle mainBundle] pathForResource:@"basicsound" ofType:@"wav"];
             
             
