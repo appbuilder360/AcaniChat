@@ -469,6 +469,13 @@ static CGFloat const kChatBarHeight4    = 94.0f;
     
     [self scrollToBottomAnimated:YES]; // must come after RESET_CHAT_BAR_HEIGHT above
     
+    int64_t delayInSeconds = 1.0;
+    dispatch_time_t popTime = dispatch_time(DISPATCH_TIME_NOW, delayInSeconds * NSEC_PER_SEC);
+    dispatch_after(popTime, dispatch_get_main_queue(), ^(void){
+        [self.chatContent reloadData];
+        [self scrollToBottomAnimated:YES];
+    });
+    
     // Play sound or buzz, depending on user settings.
 //    NSString *sendPath = [[NSBundle mainBundle] pathForResource:@"basicsound" ofType:@"wav"];
 //    CFURLRef baseURL = (__bridge CFURLRef)[NSURL fileURLWithPath:sendPath];
@@ -990,7 +997,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
         
         self.iPhonePopover = [[WEPopoverController alloc] initWithContentViewController:occupantView];
         [self.iPhonePopover setDelegate:self];
-        [self.iPhonePopover setPopoverContentSize:CGSizeMake(150, 250)];
+        [self.iPhonePopover setPopoverContentSize:CGSizeMake(190, 250)];
         [self.iPhonePopover presentPopoverFromBarButtonItem:self.occupantsButton permittedArrowDirections:UIPopoverArrowDirectionAny animated:YES];
 
     } else {
